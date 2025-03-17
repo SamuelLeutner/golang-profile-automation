@@ -2,6 +2,7 @@ package interfaces
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 )
 
@@ -27,18 +28,38 @@ type CustomTime struct {
 	time.Time
 }
 
-func (ct *CustomTime) UnmarshalJSON(b []byte) error {
-	var s string
-	if err := json.Unmarshal(b, &s); err != nil {
+func (p *Profile) UnmarshalJSON(b []byte) error {
+	type Alias Profile
+	aux := &struct {
+		DateOfBirth string `json:"date_of_birth"`
+		*Alias
+	}{
+		Alias: (*Alias)(p),
+	}
+
+	if err := json.Unmarshal(b, &aux); err != nil {
 		return err
 	}
 
-	t, err := time.Parse("02/01/2006", s)
-	if err != nil {
-		return err
-	}
+	p.Name = strings.ToUpper(p.Name)
+	p.Sexo = strings.ToUpper(p.Sexo)
+	p.PerfilType = strings.ToUpper(p.PerfilType)
+	p.Cpf = strings.ToUpper(p.Cpf)
+	p.EstadoCivil = strings.ToUpper(p.EstadoCivil)
+	p.RG = strings.ToUpper(p.RG)
+	p.RGOrgaoExpedidor = strings.ToUpper(p.RGOrgaoExpedidor)
+	p.Bairro = strings.ToUpper(p.Bairro)
+	p.Logradouro = strings.ToUpper(p.Logradouro)
+	p.Numero = strings.ToUpper(p.Numero)
 
-	ct.Time = t
+	if aux.DateOfBirth != "" {
+		t, err := time.Parse("02/01/2006", aux.DateOfBirth)
+		if err == nil {
+			p.DateOfBirth.Time = t
+		} else {
+			return err
+		}
+	}
 	return nil
 }
 
