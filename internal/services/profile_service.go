@@ -8,8 +8,9 @@ import (
 	"sync"
 	"time"
 
-	jacad "github.com/SamuelLeutner/golang-profile-automation/internal/clients"
+	j "github.com/SamuelLeutner/golang-profile-automation/internal/clients"
 	m "github.com/SamuelLeutner/golang-profile-automation/internal/models"
+	pp "github.com/SamuelLeutner/golang-profile-automation/pkg/profile"
 	"github.com/gin-gonic/gin"
 )
 
@@ -25,7 +26,7 @@ func getAuthToken() (string, error) {
 	defer tokenMutex.Unlock()
 
 	if BEARER_TOKEN == "" || tokenRequestCount >= 10 {
-		respAuth, err := jacad.AuthenticateJacad(os.Getenv("JACAD_AUTH_TOKEN"))
+		respAuth, err := j.AuthenticateJacad(os.Getenv("JACAD_AUTH_TOKEN"))
 		if err != nil {
 			return "", err
 		}
@@ -37,11 +38,65 @@ func getAuthToken() (string, error) {
 	return BEARER_TOKEN, nil
 }
 
-func CreatePerfil(c *gin.Context) (*http.Response, error) {
-	var profile m.Profile
+func handleCreateProfile(c *gin.Context) (*m.Profile, string, error) {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
 
-	if err := c.ShouldBindJSON(&profile); err != nil {
+	profile := &m.Profile{}
+	var errProfile error
+	var token string
+	var authErr error
+
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		err := pp.GetProfileContent(c, profile)
+		mu.Lock()
+		errProfile = err
+		mu.Unlock()
+	}()
+
+	go func() {
+		defer wg.Done()
+		t, err := getAuthToken()
+		mu.Lock()
+		token, authErr = t, err
+		mu.Unlock()
+	}()
+
+	wg.Wait()
+
+	if errProfile != nil {
+		return nil, "", errProfile
+	}
+	if authErr != nil {
+		return nil, "", authErr
+	}
+
+	return profile, token, nil
+}
+
+func CreateProfile(c *gin.Context) (*http.Response, error) {
+	p, token, err := handleCreateProfile(c)
+	if err != nil {
 		return nil, err
+	}
+
+	var city m.City
+	var cityErr error
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		// TODO: Pass value of document
+		city, cityErr = j.GetCityId(token, "pr", "guarapuava")
+	}()
+
+	wg.Wait()
+	if cityErr != nil {
+		return nil, cityErr
 	}
 
 	semaphore <- struct{}{}
@@ -49,16 +104,6 @@ func CreatePerfil(c *gin.Context) (*http.Response, error) {
 		time.Sleep(1 * time.Second)
 		<-semaphore
 	}()
-
-	token, err := getAuthToken()
-	if err != nil {
-		return nil, err
-	}
-
-	respCityId, err := jacad.GetCityId(token, "pr", "guarapuava")
-	if err != nil {
-		return nil, err
-	}
 
 	orgId, err := strconv.Atoi(os.Getenv("ORG_ID"))
 	if err != nil {
@@ -70,14 +115,11 @@ func CreatePerfil(c *gin.Context) (*http.Response, error) {
 		return nil, fmt.Errorf("Error to convert CLIENT_ID: %v", err)
 	}
 
-	profile.OrgID = orgId
-	profile.ClientID = clientId
-	profile.IdCidadeEndereço = respCityId.IdCidade
+	p.OrgID = orgId
+	p.ClientID = clientId
+	p.IdCidadeEndereço = city.IdCidade
 
-	fmt.Println(&profile)
-	os.Exit(1)
-
-	resp, err := jacad.CreatePerfil(token, &profile)
+	resp, err := j.CreateProfile(token, p)
 	if err != nil {
 		return nil, err
 	}

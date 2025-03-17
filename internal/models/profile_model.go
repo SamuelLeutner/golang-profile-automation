@@ -13,7 +13,7 @@ type Profile struct {
 	DateOfBirth      CustomTime `json:"date_of_birth"`
 	ClientID         int        `json:"client_id,omitempty"`
 	OrgID            int        `json:"org_id,omitempty"`
-	PerfilType       string     `json:"perfil_type"`
+	ProfileType      string     `json:"Profile_type"`
 	Cpf              string     `json:"cpf"`
 	EstadoCivil      string     `json:"estado_civil"`
 	RG               string     `json:"rg"`
@@ -43,7 +43,7 @@ func (p *Profile) UnmarshalJSON(b []byte) error {
 
 	p.Name = strings.ToUpper(p.Name)
 	p.Sexo = strings.ToUpper(p.Sexo)
-	p.PerfilType = strings.ToUpper(p.PerfilType)
+	p.ProfileType = strings.ToUpper(p.ProfileType)
 	p.Cpf = strings.ToUpper(p.Cpf)
 	p.EstadoCivil = strings.ToUpper(p.EstadoCivil)
 	p.RG = strings.ToUpper(p.RG)

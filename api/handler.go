@@ -14,7 +14,7 @@ func HandlePing(c *gin.Context) {
 }
 
 func HandleProfile(c *gin.Context) {
-	p, err := profile.CreatePerfil(c)
+	p, err := profile.CreateProfile(c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

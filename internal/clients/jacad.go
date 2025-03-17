@@ -16,17 +16,6 @@ type AuthResponse struct {
 	Token string `json:"token"`
 }
 
-type City struct {
-	IdCidade  int    `json:"idCidade"`
-	Descricao string `json:"descricao"`
-	Uf        string `json:"uf"`
-	Estado    string `json:"estado"`
-}
-
-type CityIdResponse struct {
-	Elements []City `json:"elements"`
-}
-
 func AuthenticateJacad(token string) (*AuthResponse, error) {
 	jacadUrl := os.Getenv("JACAD_URL")
 
@@ -69,7 +58,7 @@ func AuthenticateJacad(token string) (*AuthResponse, error) {
 	return &authResp, nil
 }
 
-func CreatePerfil(bearerToken string, requestBody *m.Profile) (*http.Response, error) {
+func CreateProfile(bearerToken string, requestBody *m.Profile) (*http.Response, error) {
 	jacadUrl := os.Getenv("JACAD_URL")
 	if jacadUrl == "" {
 		return nil, fmt.Errorf("JACAD_URL are not set")
@@ -105,7 +94,7 @@ func CreatePerfil(bearerToken string, requestBody *m.Profile) (*http.Response, e
 	return resp, nil
 }
 
-func GetCityId(bearerToken string, uf string, search string) (*City, error) {
+func GetCityId(bearerToken string, uf string, search string) (*m.City, error) {
 	jacadUrl := os.Getenv("JACAD_URL")
 	if jacadUrl == "" {
 		return nil, fmt.Errorf("JACAD_URL are not set")
@@ -138,7 +127,7 @@ func GetCityId(bearerToken string, uf string, search string) (*City, error) {
 		return nil, err
 	}
 
-	var response CityIdResponse
+	var response m.CityIdResponse
 	if err := json.Unmarshal(bodyBytes, &response); err != nil {
 		fmt.Println("Error in Json Unmarshal City:", err)
 		return nil, err
