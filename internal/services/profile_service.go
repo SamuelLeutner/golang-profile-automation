@@ -53,7 +53,6 @@ func CreatePerfil(c *gin.Context) (*http.Response, error) {
 	fmt.Println("Criando perfil com os dados:", profile)
 	fmt.Println("orgId:", profile.OrgID)
 	fmt.Println("clientId:", profile.ClientID)
-
 	os.Exit(1)
 
 	resp, err := jacad.CreatePerfil(respAuth.Token, &profile)
