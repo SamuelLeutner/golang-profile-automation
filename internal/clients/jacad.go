@@ -31,7 +31,7 @@ func AuthenticateJacad(token string) (*AuthResponse, error) {
 	jacadUrl := os.Getenv("JACAD_URL")
 
 	if jacadUrl == "" {
-		return nil, fmt.Errorf("JACAD_URL não configurado")
+		return nil, fmt.Errorf("JACAD_URL are not set")
 	}
 
 	url := jacadUrl + "/auth/token"
@@ -46,9 +46,14 @@ func AuthenticateJacad(token string) (*AuthResponse, error) {
 	req.Header.Add("token", token)
 
 	resp, err := client.Do(req)
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("Error in `AuthenticateJacad`. Status: %s", resp.Status)
+	}
+
 	if err != nil {
 		return nil, err
 	}
+
 	defer resp.Body.Close()
 
 	bodyBytes, err := io.ReadAll(resp.Body)
@@ -67,7 +72,7 @@ func AuthenticateJacad(token string) (*AuthResponse, error) {
 func CreatePerfil(bearerToken string, requestBody *m.Profile) (*http.Response, error) {
 	jacadUrl := os.Getenv("JACAD_URL")
 	if jacadUrl == "" {
-		return nil, fmt.Errorf("JACAD_URL não configurado")
+		return nil, fmt.Errorf("JACAD_URL are not set")
 	}
 
 	url := jacadUrl + "/basicos/perfis"
@@ -94,7 +99,7 @@ func CreatePerfil(bearerToken string, requestBody *m.Profile) (*http.Response, e
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("Erro ao criar perfil, status: %s", resp.Status)
+		return nil, fmt.Errorf("Error creating profile, status: %s", resp.Status)
 	}
 
 	return resp, nil
@@ -103,7 +108,7 @@ func CreatePerfil(bearerToken string, requestBody *m.Profile) (*http.Response, e
 func GetCityId(bearerToken string, uf string, search string) (*City, error) {
 	jacadUrl := os.Getenv("JACAD_URL")
 	if jacadUrl == "" {
-		return nil, fmt.Errorf("JACAD_URL não configurado")
+		return nil, fmt.Errorf("JACAD_URL are not set")
 	}
 
 	url := jacadUrl + "/basicos/locais/cidades?uf=" + uf + "&search=" + search + "&currentPage=1&pageSize=10"
@@ -125,7 +130,7 @@ func GetCityId(bearerToken string, uf string, search string) (*City, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("Erro ao buscar cidade, status: %s", resp.Status)
+		return nil, fmt.Errorf("Error to search city, status: %s", resp.Status)
 	}
 
 	bodyBytes, err := io.ReadAll(resp.Body)
@@ -135,18 +140,18 @@ func GetCityId(bearerToken string, uf string, search string) (*City, error) {
 
 	var response CityIdResponse
 	if err := json.Unmarshal(bodyBytes, &response); err != nil {
-		fmt.Println("Erro ao fazer Unmarshal:", err)
+		fmt.Println("Error in Json Unmarshal City:", err)
 		return nil, err
 	}
 
 	if len(response.Elements) == 0 {
-		return nil, fmt.Errorf("Nenhuma cidade encontrada para '%s'", search)
+		return nil, fmt.Errorf("City not found for this search: '%s'", search)
 	}
 
 	city := response.Elements[0]
 
 	if strings.ToLower(city.Uf) != strings.ToLower(uf) || strings.ToLower(city.Descricao) != strings.ToLower(search) {
-		return nil, fmt.Errorf("Cidade não encontrada")
+		return nil, fmt.Errorf("City not found")
 	}
 
 	return &city, nil
