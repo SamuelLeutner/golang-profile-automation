@@ -41,3 +41,7 @@ func (ct *CustomTime) UnmarshalJSON(b []byte) error {
 	ct.Time = t
 	return nil
 }
+
+func (ct CustomTime) String() string {
+	return ct.Time.Format("2006-01-02")
+}

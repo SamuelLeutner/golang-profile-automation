@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"time"
 
 	jacad "github.com/SamuelLeutner/golang-profile-automation/internal/clients"
 	m "github.com/SamuelLeutner/golang-profile-automation/internal/models"
@@ -42,18 +41,6 @@ func CreatePerfil(c *gin.Context) (*http.Response, error) {
 	profile.OrgID = orgId
 	profile.ClientID = clientId
 	profile.IdCidadeEndereço = respCityId.IdCidade
-
-	parsedDate, err := time.Parse("02/01/2006", profile.DateOfBirth.Format("02/01/2006"))
-	if err != nil {
-		return nil, fmt.Errorf("Erro ao formatar a data de nascimento: %v", err)
-	}
-
-	profile.DateOfBirth = m.CustomTime{Time: parsedDate}
-
-	fmt.Println("Criando perfil com os dados:", profile)
-	fmt.Println("orgId:", profile.OrgID)
-	fmt.Println("clientId:", profile.ClientID)
-	os.Exit(1)
 
 	resp, err := jacad.CreatePerfil(respAuth.Token, &profile)
 	if err != nil {
