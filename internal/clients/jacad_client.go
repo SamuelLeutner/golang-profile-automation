@@ -79,8 +79,6 @@ func CreateProfile(bearerToken string, requestBody *m.Profile) (*http.Response, 
 		return nil, err
 	}
 
-	fmt.Println("requestBody:", requestBody)
-	fmt.Println("Body enviado:", body.String())
 	req, err := http.NewRequest("POST", url, body)
 	if err != nil {
 		return nil, err
@@ -113,7 +111,10 @@ func GetCityId(bearerToken string, uf string, search string) (*m.City, error) {
 		return nil, fmt.Errorf("JACAD_URL are not set")
 	}
 
-	url := jacadUrl + JACAD_URL_GET_CITY_ID + "?uf=" + strings.ToLower(uf) + "&search=" + strings.ToLower(search) + "&currentPage=1&pageSize=10"
+	ufFormat := strings.TrimSpace(strings.ToLower(uf))
+	searchFormat := strings.TrimSpace(strings.ToLower(search))
+
+	url := jacadUrl + JACAD_URL_GET_CITY_ID + "?uf=" + ufFormat + "&search=" + searchFormat + "&currentPage=1&pageSize=10"
 	client := &http.Client{}
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -151,7 +152,7 @@ func GetCityId(bearerToken string, uf string, search string) (*m.City, error) {
 
 	city := response.Elements[0]
 
-	if strings.ToLower(city.Uf) != strings.ToLower(uf) || strings.ToLower(city.Descricao) != strings.ToLower(search) {
+	if strings.ToLower(city.Uf) != ufFormat || strings.ToLower(city.Descricao) != searchFormat {
 		return nil, fmt.Errorf("City not found")
 	}
 

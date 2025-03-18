@@ -2,6 +2,7 @@ package profile
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -91,17 +92,20 @@ func GetProfileContent(c *gin.Context, p *m.Profile) error {
 
 	dataRow := rows[1]
 	p.Name = strings.ToUpper(dataRow[columnIndex["Name"]])
-	p.Email = strings.ToUpper(dataRow[columnIndex["Email"]])
+	p.Email = dataRow[columnIndex["Email"]]
 	p.Sexo = sexoMap[dataRow[columnIndex["Sexo"]]]
 	p.Cpf = strings.ToUpper(dataRow[columnIndex["Cpf"]])
 	p.EstadoCivil = maritalStatus[dataRow[columnIndex["EstadoCivil"]]]
-	p.RG = strings.ToUpper(dataRow[columnIndex["RG"]])
 	p.RGOrgaoExpedidor = strings.ToUpper(dataRow[columnIndex["RGOrgaoExpedidor"]])
 	p.Bairro = strings.ToUpper(dataRow[columnIndex["Bairro"]])
 	p.Logradouro = strings.ToUpper(dataRow[columnIndex["Logradouro"]])
 	p.Numero = strings.ToUpper(dataRow[columnIndex["Numero"]])
 	p.Estado = strings.ToUpper(dataRow[columnIndex["Estado"]])
 	p.Cidade = strings.ToUpper(dataRow[columnIndex["Cidade"]])
+
+	rgTrim := strings.TrimSpace(strings.ToUpper(dataRow[columnIndex["RG"]]))
+	re := regexp.MustCompile(`[^A-Z0-9]`)
+	p.RG = re.ReplaceAllString(rgTrim, "")
 
 	d, err := formatDate(dataRow[columnIndex["DateOfBirth"]])
 	if err != nil {

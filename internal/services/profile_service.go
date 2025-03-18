@@ -14,7 +14,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const PROFILE_TYPE = "FISICA"
+const (
+	ID_NATIONALITY = 0
+	PROFILE_TYPE   = "FISICA"
+)
 
 var (
 	tokenRequestCount = 0
@@ -116,11 +119,11 @@ func CreateProfile(c *gin.Context) (*http.Response, error) {
 		return nil, fmt.Errorf("Error to convert CLIENT_ID: %v", err)
 	}
 
-	// TODO: Verify why ClientID not be set in `CreateProfile`
 	p.OrgID = orgId
 	p.ClientID = clientId
 	p.ProfileType = PROFILE_TYPE
 	p.IdCidadeEndereco = city.IdCidade
+	p.IdNacionalidade = ID_NATIONALITY
 
 	resp, err := j.CreateProfile(token, p)
 	if err != nil {
