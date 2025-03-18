@@ -14,6 +14,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const PROFILE_TYPE = "FISICA"
+
 var (
 	tokenRequestCount = 0
 	BEARER_TOKEN      = ""
@@ -42,7 +44,7 @@ func handleCreateProfile(c *gin.Context) (*m.Profile, string, error) {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	profile := &m.Profile{}
+	p := &m.Profile{}
 	var errProfile error
 	var token string
 	var authErr error
@@ -51,7 +53,7 @@ func handleCreateProfile(c *gin.Context) (*m.Profile, string, error) {
 
 	go func() {
 		defer wg.Done()
-		err := pp.GetProfileContent(c, profile)
+		err := pp.GetProfileContent(c, p)
 		mu.Lock()
 		errProfile = err
 		mu.Unlock()
@@ -74,7 +76,7 @@ func handleCreateProfile(c *gin.Context) (*m.Profile, string, error) {
 		return nil, "", authErr
 	}
 
-	return profile, token, nil
+	return p, token, nil
 }
 
 func CreateProfile(c *gin.Context) (*http.Response, error) {
@@ -83,15 +85,14 @@ func CreateProfile(c *gin.Context) (*http.Response, error) {
 		return nil, err
 	}
 
-	var city m.City
+	var city *m.City
 	var cityErr error
 	var wg sync.WaitGroup
 	wg.Add(1)
 
 	go func() {
 		defer wg.Done()
-		// TODO: Pass value of document
-		city, cityErr = j.GetCityId(token, "pr", "guarapuava")
+		city, cityErr = j.GetCityId(token, p.Estado, p.Cidade)
 	}()
 
 	wg.Wait()
@@ -115,9 +116,11 @@ func CreateProfile(c *gin.Context) (*http.Response, error) {
 		return nil, fmt.Errorf("Error to convert CLIENT_ID: %v", err)
 	}
 
+	// TODO: Verify why ClientID not be set in `CreateProfile`
 	p.OrgID = orgId
 	p.ClientID = clientId
-	p.IdCidadeEndereço = city.IdCidade
+	p.ProfileType = PROFILE_TYPE
+	p.IdCidadeEndereco = city.IdCidade
 
 	resp, err := j.CreateProfile(token, p)
 	if err != nil {

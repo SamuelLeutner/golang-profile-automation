@@ -2,11 +2,28 @@ package profile
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	m "github.com/SamuelLeutner/golang-profile-automation/internal/models"
 	"github.com/gin-gonic/gin"
 	e "github.com/xuri/excelize/v2"
 )
+
+var sexoMap = map[string]string{
+	"M": "MASCULINO",
+	"F": "FEMININO",
+}
+
+var maritalStatus = map[string]string{
+	"Solteiro(a)":   "SOLTEIRO",
+	"Casado(a)":     "CASADO",
+	"Divorciado(a)": "DIVORCIADO",
+	"Viuvo(a)":      "VIUVO",
+	"União Estável": "UNIAO_ESTAVEL",
+	"Desquitado(a)": "DESQUITADO",
+	"":              "NAO_INFORMADO",
+}
 
 var requiredColumns = map[string]string{
 	"ALUNO":        "Name",
@@ -19,6 +36,8 @@ var requiredColumns = map[string]string{
 	"BAIRRO":       "Bairro",
 	"LOGRADOURO":   "Logradouro",
 	"NUMERO":       "Numero",
+	"ESTADO":       "Estado",
+	"CIDADE":       "Cidade",
 	"NASCIMENTO":   "DateOfBirth",
 }
 
@@ -28,7 +47,13 @@ func GetProfileContent(c *gin.Context, p *m.Profile) error {
 		return fmt.Errorf("failed to get uploaded file: %v", err)
 	}
 
-	f, err := e.OpenFile(file.Filename)
+	tempPath := fmt.Sprintf("/tmp/%s", file.Filename)
+
+	if err := c.SaveUploadedFile(file, tempPath); err != nil {
+		return fmt.Errorf("failed to save uploaded file: %v", err)
+	}
+
+	f, err := e.OpenFile(tempPath)
 	if err != nil {
 		return err
 	}
@@ -53,35 +78,50 @@ func GetProfileContent(c *gin.Context, p *m.Profile) error {
 	columnIndex := make(map[string]int)
 
 	for i, colName := range header {
-		for _, required := range requiredColumns {
-			if colName == required {
-				columnIndex[required] = i
-			}
+		if mappedName, exists := requiredColumns[colName]; exists {
+			columnIndex[mappedName] = i
 		}
 	}
 
-	for _, col := range requiredColumns {
-		if _, exists := columnIndex[col]; !exists {
-			return fmt.Errorf("missing required column: %s", col)
+	for _, alias := range requiredColumns {
+		if _, exists := columnIndex[alias]; !exists {
+			return fmt.Errorf("missing required column: %s", alias)
 		}
 	}
 
 	dataRow := rows[1]
+	p.Name = strings.ToUpper(dataRow[columnIndex["Name"]])
+	p.Email = strings.ToUpper(dataRow[columnIndex["Email"]])
+	p.Sexo = sexoMap[dataRow[columnIndex["Sexo"]]]
+	p.Cpf = strings.ToUpper(dataRow[columnIndex["Cpf"]])
+	p.EstadoCivil = maritalStatus[dataRow[columnIndex["EstadoCivil"]]]
+	p.RG = strings.ToUpper(dataRow[columnIndex["RG"]])
+	p.RGOrgaoExpedidor = strings.ToUpper(dataRow[columnIndex["RGOrgaoExpedidor"]])
+	p.Bairro = strings.ToUpper(dataRow[columnIndex["Bairro"]])
+	p.Logradouro = strings.ToUpper(dataRow[columnIndex["Logradouro"]])
+	p.Numero = strings.ToUpper(dataRow[columnIndex["Numero"]])
+	p.Estado = strings.ToUpper(dataRow[columnIndex["Estado"]])
+	p.Cidade = strings.ToUpper(dataRow[columnIndex["Cidade"]])
 
-	// TODO: Add another struct type for send to jacad
-	p.Name = dataRow[columnIndex["Name"]]
-	p.Email = dataRow[columnIndex["Email"]]
-	p.Sexo = dataRow[columnIndex["Sexo"]]
-	p.Cpf = dataRow[columnIndex["Cpf"]]
-	p.EstadoCivil = dataRow[columnIndex["EstadoCivil"]]
-	p.RG = dataRow[columnIndex["RG"]]
-	p.RGOrgaoExpedidor = dataRow[columnIndex["RGOrgaoExpedidor"]]
-	p.Bairro = dataRow[columnIndex["Bairro"]]
-	p.Logradouro = dataRow[columnIndex["Logradouro"]]
-	p.Numero = dataRow[columnIndex["Numero"]]
-	p.DateOfBirth = dataRow[columnIndex["DateOfBirth"]]
+	d, err := formatDate(dataRow[columnIndex["DateOfBirth"]])
+	if err != nil {
+		return err
+	}
 
-	fmt.Printf("Profile parsed: %+v\n", p)
+	p.DateOfBirth = d
 
 	return nil
+}
+
+func formatDate(dateStr string) (string, error) {
+	if dateStr == "" {
+		return "", nil
+	}
+
+	t, err := time.Parse("02/01/2006", dateStr)
+	if err != nil {
+		return "", err
+	}
+
+	return t.Format("2006-01-02"), nil
 }

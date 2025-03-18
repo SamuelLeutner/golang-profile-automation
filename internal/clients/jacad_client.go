@@ -12,6 +12,12 @@ import (
 	m "github.com/SamuelLeutner/golang-profile-automation/internal/models"
 )
 
+const (
+	JACAD_URL_AUTHENTICATE = "/auth/token"
+	JACAD_URL_STORE        = "/basicos/perfis"
+	JACAD_URL_GET_CITY_ID  = "/basicos/locais/cidades"
+)
+
 type AuthResponse struct {
 	Token string `json:"token"`
 }
@@ -23,7 +29,7 @@ func AuthenticateJacad(token string) (*AuthResponse, error) {
 		return nil, fmt.Errorf("JACAD_URL are not set")
 	}
 
-	url := jacadUrl + "/auth/token"
+	url := jacadUrl + JACAD_URL_AUTHENTICATE
 
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", url, nil)
@@ -64,7 +70,7 @@ func CreateProfile(bearerToken string, requestBody *m.Profile) (*http.Response, 
 		return nil, fmt.Errorf("JACAD_URL are not set")
 	}
 
-	url := jacadUrl + "/basicos/perfis"
+	url := jacadUrl + JACAD_URL_STORE
 	client := &http.Client{}
 
 	body := new(bytes.Buffer)
@@ -73,6 +79,8 @@ func CreateProfile(bearerToken string, requestBody *m.Profile) (*http.Response, 
 		return nil, err
 	}
 
+	fmt.Println("requestBody:", requestBody)
+	fmt.Println("Body enviado:", body.String())
 	req, err := http.NewRequest("POST", url, body)
 	if err != nil {
 		return nil, err
@@ -85,10 +93,15 @@ func CreateProfile(bearerToken string, requestBody *m.Profile) (*http.Response, 
 	if err != nil {
 		return nil, err
 	}
+
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= 400 && resp.StatusCode != 422 {
 		return nil, fmt.Errorf("Error creating profile, status: %s", resp.Status)
+	}
+
+	if resp.StatusCode == 422 {
+		return nil, fmt.Errorf("This profile already exists.")
 	}
 
 	return resp, nil
@@ -100,7 +113,7 @@ func GetCityId(bearerToken string, uf string, search string) (*m.City, error) {
 		return nil, fmt.Errorf("JACAD_URL are not set")
 	}
 
-	url := jacadUrl + "/basicos/locais/cidades?uf=" + uf + "&search=" + search + "&currentPage=1&pageSize=10"
+	url := jacadUrl + JACAD_URL_GET_CITY_ID + "?uf=" + strings.ToLower(uf) + "&search=" + strings.ToLower(search) + "&currentPage=1&pageSize=10"
 	client := &http.Client{}
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -129,7 +142,6 @@ func GetCityId(bearerToken string, uf string, search string) (*m.City, error) {
 
 	var response m.CityIdResponse
 	if err := json.Unmarshal(bodyBytes, &response); err != nil {
-		fmt.Println("Error in Json Unmarshal City:", err)
 		return nil, err
 	}
 
