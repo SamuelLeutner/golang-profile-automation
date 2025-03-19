@@ -3,6 +3,7 @@ package profile
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -44,6 +45,7 @@ var requiredColumns = map[string]string{
 }
 
 func HandleFileRow(c *gin.Context) ([]*m.Profile, error) {
+
 	file, err := c.FormFile("file")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get uploaded file: %v", err)
@@ -73,10 +75,17 @@ func HandleFileRow(c *gin.Context) ([]*m.Profile, error) {
 	var profiles []*m.Profile
 	var errProfile []m.ErrProfile
 	for i, row := range rows[1:] {
+		if len(row) < len(requiredColumns) {
+			errProfile = append(errProfile, interfaces.ErrProfile{
+				Line: i + 2,
+				Cpf:  "Unknown",
+				Err:  fmt.Sprintf("row %d has insufficient columns (expected %d)", i+2, len(requiredColumns))})
+			continue
+		}
+
 		p := &m.Profile{}
 		err := getProfileContent(row, rows[0], p)
 		if err != nil {
-
 			errProfile = append(errProfile, interfaces.ErrProfile{
 				Line: i + 2, // Excel line start at
 				Cpf:  p.Cpf,
@@ -84,8 +93,11 @@ func HandleFileRow(c *gin.Context) ([]*m.Profile, error) {
 			})
 			continue
 		}
-
 		profiles = append(profiles, p)
+	}
+
+	if len(profiles) == 0 {
+		return nil, fmt.Errorf("no valid profiles found in the uploaded file")
 	}
 
 	return profiles, nil
@@ -114,11 +126,21 @@ func getProfileContent(row []string, header []string, p *m.Profile) error {
 	p.RGOrgaoExpedidor = strings.ToUpper(row[columnIndex["RGOrgaoExpedidor"]])
 	p.Bairro = strings.ToUpper(row[columnIndex["Bairro"]])
 	p.Logradouro = strings.ToUpper(row[columnIndex["Logradouro"]])
-	p.Numero = strings.ToUpper(row[columnIndex["Numero"]])
 	p.Estado = strings.ToUpper(row[columnIndex["Estado"]])
 	p.Cidade = strings.ToUpper(row[columnIndex["Cidade"]])
 
+	houseNumber := strings.ToUpper(row[columnIndex["Numero"]])
+	p.Numero = houseNumber
+
+	if _, err := strconv.Atoi(houseNumber); err != nil && houseNumber == "" {
+		p.Numero = "0"
+	}
+
 	rgTrim := strings.TrimSpace(strings.ToUpper(row[columnIndex["RG"]]))
+	if rgTrim == "" {
+		return fmt.Errorf("Missing RG value.")
+	}
+
 	re := regexp.MustCompile(`[^A-Z0-9]`)
 	p.RG = re.ReplaceAllString(rgTrim, "")
 

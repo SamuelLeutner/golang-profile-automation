@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -64,7 +65,7 @@ func AuthenticateJacad(token string) (*AuthResponse, error) {
 	return &authResp, nil
 }
 
-func CreateProfile(bearerToken string, requestBody *m.Profile) (*http.Response, error) {
+func CreateProfile(bt string, requestBody *m.Profile) (*http.Response, error) {
 	jacadUrl := os.Getenv("JACAD_URL")
 	if jacadUrl == "" {
 		return nil, fmt.Errorf("JACAD_URL are not set")
@@ -85,7 +86,7 @@ func CreateProfile(bearerToken string, requestBody *m.Profile) (*http.Response, 
 	}
 
 	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Authorization", "Bearer "+bearerToken)
+	req.Header.Add("Authorization", "Bearer "+bt)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -94,7 +95,7 @@ func CreateProfile(bearerToken string, requestBody *m.Profile) (*http.Response, 
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 && resp.StatusCode != 422 {
+	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("Error creating profile, status: %s", resp.Status)
 	}
 
@@ -105,7 +106,7 @@ func CreateProfile(bearerToken string, requestBody *m.Profile) (*http.Response, 
 	return resp, nil
 }
 
-func GetCityId(bearerToken string, uf string, search string) (*m.City, error) {
+func GetCityId(bt string, uf string, search string) (*m.City, error) {
 	jacadUrl := os.Getenv("JACAD_URL")
 	if jacadUrl == "" {
 		return nil, fmt.Errorf("JACAD_URL are not set")
@@ -114,16 +115,19 @@ func GetCityId(bearerToken string, uf string, search string) (*m.City, error) {
 	ufFormat := strings.TrimSpace(strings.ToLower(uf))
 	searchFormat := strings.TrimSpace(strings.ToLower(search))
 
-	url := jacadUrl + JACAD_URL_GET_CITY_ID + "?uf=" + ufFormat + "&search=" + searchFormat + "&currentPage=1&pageSize=10"
+	ufEncoded := url.QueryEscape(ufFormat)
+	cityNameEncoded := url.QueryEscape(searchFormat)
+
+	baseUrl := jacadUrl + JACAD_URL_GET_CITY_ID + fmt.Sprintf("?uf=%s&search=%s&currentPage=1&pageSize=10", ufEncoded, cityNameEncoded)
 	client := &http.Client{}
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", baseUrl, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Authorization", "Bearer "+bearerToken)
+	req.Header.Add("Authorization", "Bearer "+bt)
 
 	resp, err := client.Do(req)
 	if err != nil {

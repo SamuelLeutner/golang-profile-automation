@@ -3,11 +3,11 @@ package profile
 import (
 	"fmt"
 
-	interfaces "github.com/SamuelLeutner/golang-profile-automation/internal/models"
+	m "github.com/SamuelLeutner/golang-profile-automation/internal/models"
 	e "github.com/xuri/excelize/v2"
 )
 
-func SaveErrors(errors []interfaces.ErrProfile) error {
+func SaveErrors(errors []*m.ErrProfile) error {
 	if len(errors) == 0 {
 		return nil
 	}
