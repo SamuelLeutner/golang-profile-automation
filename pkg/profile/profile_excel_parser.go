@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	interfaces "github.com/SamuelLeutner/golang-profile-automation/internal/models"
 	m "github.com/SamuelLeutner/golang-profile-automation/internal/models"
 	"github.com/gin-gonic/gin"
 	e "github.com/xuri/excelize/v2"
@@ -42,40 +43,55 @@ var requiredColumns = map[string]string{
 	"NASCIMENTO":   "DateOfBirth",
 }
 
-func GetProfileContent(c *gin.Context, p *m.Profile) error {
+func HandleFileRow(c *gin.Context) ([]*m.Profile, error) {
 	file, err := c.FormFile("file")
 	if err != nil {
-		return fmt.Errorf("failed to get uploaded file: %v", err)
+		return nil, fmt.Errorf("failed to get uploaded file: %v", err)
 	}
 
 	tempPath := fmt.Sprintf("/tmp/%s", file.Filename)
 
 	if err := c.SaveUploadedFile(file, tempPath); err != nil {
-		return fmt.Errorf("failed to save uploaded file: %v", err)
+		return nil, fmt.Errorf("failed to save uploaded file: %v", err)
 	}
 
 	f, err := e.OpenFile(tempPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer f.Close()
 
-	defer func() {
-		if err := f.Close(); err != nil {
-			fmt.Println(err)
-		}
-	}()
-
 	rows, err := f.GetRows("Sheet1")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(rows) < 2 {
-		return fmt.Errorf("invalid file format")
+		return nil, fmt.Errorf("invalid file format")
 	}
 
-	header := rows[0]
+	var profiles []*m.Profile
+	var errProfile []m.ErrProfile
+	for i, row := range rows[1:] {
+		p := &m.Profile{}
+		err := getProfileContent(row, rows[0], p)
+		if err != nil {
+
+			errProfile = append(errProfile, interfaces.ErrProfile{
+				Line: i + 2, // Excel line start at
+				Cpf:  p.Cpf,
+				Err:  err.Error(),
+			})
+			continue
+		}
+
+		profiles = append(profiles, p)
+	}
+
+	return profiles, nil
+}
+
+func getProfileContent(row []string, header []string, p *m.Profile) error {
 	columnIndex := make(map[string]int)
 
 	for i, colName := range header {
@@ -90,24 +106,23 @@ func GetProfileContent(c *gin.Context, p *m.Profile) error {
 		}
 	}
 
-	dataRow := rows[1]
-	p.Name = strings.ToUpper(dataRow[columnIndex["Name"]])
-	p.Email = dataRow[columnIndex["Email"]]
-	p.Sexo = sexoMap[dataRow[columnIndex["Sexo"]]]
-	p.Cpf = strings.ToUpper(dataRow[columnIndex["Cpf"]])
-	p.EstadoCivil = maritalStatus[dataRow[columnIndex["EstadoCivil"]]]
-	p.RGOrgaoExpedidor = strings.ToUpper(dataRow[columnIndex["RGOrgaoExpedidor"]])
-	p.Bairro = strings.ToUpper(dataRow[columnIndex["Bairro"]])
-	p.Logradouro = strings.ToUpper(dataRow[columnIndex["Logradouro"]])
-	p.Numero = strings.ToUpper(dataRow[columnIndex["Numero"]])
-	p.Estado = strings.ToUpper(dataRow[columnIndex["Estado"]])
-	p.Cidade = strings.ToUpper(dataRow[columnIndex["Cidade"]])
+	p.Name = strings.ToUpper(row[columnIndex["Name"]])
+	p.Email = row[columnIndex["Email"]]
+	p.Sexo = sexoMap[row[columnIndex["Sexo"]]]
+	p.Cpf = strings.ToUpper(row[columnIndex["Cpf"]])
+	p.EstadoCivil = maritalStatus[row[columnIndex["EstadoCivil"]]]
+	p.RGOrgaoExpedidor = strings.ToUpper(row[columnIndex["RGOrgaoExpedidor"]])
+	p.Bairro = strings.ToUpper(row[columnIndex["Bairro"]])
+	p.Logradouro = strings.ToUpper(row[columnIndex["Logradouro"]])
+	p.Numero = strings.ToUpper(row[columnIndex["Numero"]])
+	p.Estado = strings.ToUpper(row[columnIndex["Estado"]])
+	p.Cidade = strings.ToUpper(row[columnIndex["Cidade"]])
 
-	rgTrim := strings.TrimSpace(strings.ToUpper(dataRow[columnIndex["RG"]]))
+	rgTrim := strings.TrimSpace(strings.ToUpper(row[columnIndex["RG"]]))
 	re := regexp.MustCompile(`[^A-Z0-9]`)
 	p.RG = re.ReplaceAllString(rgTrim, "")
 
-	d, err := formatDate(dataRow[columnIndex["DateOfBirth"]])
+	d, err := formatDate(row[columnIndex["DateOfBirth"]])
 	if err != nil {
 		return err
 	}

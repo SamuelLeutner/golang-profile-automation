@@ -43,65 +43,11 @@ func getAuthToken() (string, error) {
 	return BEARER_TOKEN, nil
 }
 
-func handleCreateProfile(c *gin.Context) (*m.Profile, string, error) {
+func handleFileValues(c *gin.Context) ([]*m.Profile, string, error) {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	p := &m.Profile{}
-	var errProfile error
-	var token string
-	var authErr error
-
 	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
-		err := pp.GetProfileContent(c, p)
-		mu.Lock()
-		errProfile = err
-		mu.Unlock()
-	}()
-
-	go func() {
-		defer wg.Done()
-		t, err := getAuthToken()
-		mu.Lock()
-		token, authErr = t, err
-		mu.Unlock()
-	}()
-
-	wg.Wait()
-
-	if errProfile != nil {
-		return nil, "", errProfile
-	}
-	if authErr != nil {
-		return nil, "", authErr
-	}
-
-	return p, token, nil
-}
-
-func CreateProfile(c *gin.Context) (*http.Response, error) {
-	p, token, err := handleCreateProfile(c)
-	if err != nil {
-		return nil, err
-	}
-
-	var city *m.City
-	var cityErr error
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-		city, cityErr = j.GetCityId(token, p.Estado, p.Cidade)
-	}()
-
-	wg.Wait()
-	if cityErr != nil {
-		return nil, cityErr
-	}
 
 	semaphore <- struct{}{}
 	defer func() {
@@ -109,25 +55,116 @@ func CreateProfile(c *gin.Context) (*http.Response, error) {
 		<-semaphore
 	}()
 
-	orgId, err := strconv.Atoi(os.Getenv("ORG_ID"))
-	if err != nil {
-		return nil, fmt.Errorf("Error to convert ORG_ID: %v", err)
+	var token string
+	var authErr error
+
+	go func() {
+		defer wg.Done()
+		tokenRequestCount += 1
+		t, err := getAuthToken()
+		mu.Lock()
+		token, authErr = t, err
+		mu.Unlock()
+	}()
+	wg.Wait()
+
+	if authErr != nil {
+		return nil, "", authErr
 	}
 
-	clientId, err := strconv.Atoi(os.Getenv("CLIENT_ID"))
-	if err != nil {
-		return nil, fmt.Errorf("Error to convert CLIENT_ID: %v", err)
+	var profiles []*m.Profile
+	var errProfile error
+
+	go func() {
+		defer wg.Done()
+		tokenRequestCount += 1
+		pe, err := pp.HandleFileRow(c)
+		mu.Lock()
+		errProfile = err
+		profiles = pe
+		mu.Unlock()
+	}()
+	wg.Wait()
+
+	if errProfile != nil {
+		return nil, "", errProfile
 	}
 
-	p.OrgID = orgId
-	p.ClientID = clientId
-	p.ProfileType = PROFILE_TYPE
-	p.IdCidadeEndereco = city.IdCidade
-	p.IdNacionalidade = ID_NATIONALITY
+	return profiles, token, nil
+}
 
-	resp, err := j.CreateProfile(token, p)
+func CreateProfile(c *gin.Context) (*http.Response, error) {
+	profiles, token, err := handleFileValues(c)
 	if err != nil {
 		return nil, err
+	}
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var resp *http.Response
+	var respErr error
+
+	for _, p := range profiles {
+		wg.Add(1)
+
+		go func(p *m.Profile) {
+			defer wg.Done()
+			tokenRequestCount += 1
+			city, cityErr := j.GetCityId(token, p.Estado, p.Cidade)
+
+			if cityErr != nil {
+				mu.Lock()
+				respErr = cityErr
+				mu.Unlock()
+				return
+			}
+
+			orgId, err := strconv.Atoi(os.Getenv("ORG_ID"))
+			if err != nil {
+				mu.Lock()
+				respErr = fmt.Errorf("Error to convert ORG_ID: %v", err)
+				mu.Unlock()
+				return
+			}
+
+			clientId, err := strconv.Atoi(os.Getenv("CLIENT_ID"))
+			if err != nil {
+				mu.Lock()
+				respErr = fmt.Errorf("Error to convert CLIENT_ID: %v", err)
+				mu.Unlock()
+				return
+			}
+
+			p.OrgID = orgId
+			p.ClientID = clientId
+			p.ProfileType = PROFILE_TYPE
+			p.IdCidadeEndereco = city.IdCidade
+			p.IdNacionalidade = ID_NATIONALITY
+
+			tokenRequestCount += 1
+
+			// TODO: Remove the exit program after final test
+			fmt.Println("User", p)
+			os.Exit(1)
+
+			respProfile, err := j.CreateProfile(token, p)
+			if err != nil {
+				mu.Lock()
+				respErr = err
+				mu.Unlock()
+				return
+			}
+
+			mu.Lock()
+			resp = respProfile
+			mu.Unlock()
+		}(p)
+	}
+
+	wg.Wait()
+
+	if respErr != nil {
+		return nil, respErr
 	}
 
 	return resp, nil
