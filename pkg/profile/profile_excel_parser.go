@@ -2,7 +2,6 @@ package profile
 
 import (
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -45,7 +44,6 @@ var requiredColumns = map[string]string{
 }
 
 func HandleFileRow(c *gin.Context) ([]*m.Profile, error) {
-
 	file, err := c.FormFile("file")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get uploaded file: %v", err)
@@ -118,22 +116,27 @@ func getProfileContent(row []string, header []string, p *m.Profile) error {
 		}
 	}
 
-	p.Name = strings.ToUpper(row[columnIndex["Name"]])
+	p.Name = strings.TrimSpace(strings.ToUpper(row[columnIndex["Name"]]))
 	p.Email = row[columnIndex["Email"]]
 	p.Sexo = sexoMap[row[columnIndex["Sexo"]]]
-	p.Cpf = strings.ToUpper(row[columnIndex["Cpf"]])
+	p.Cpf = strings.TrimSpace(strings.ToUpper(row[columnIndex["Cpf"]]))
 	p.EstadoCivil = maritalStatus[row[columnIndex["EstadoCivil"]]]
-	p.RGOrgaoExpedidor = strings.ToUpper(row[columnIndex["RGOrgaoExpedidor"]])
-	p.Bairro = strings.ToUpper(row[columnIndex["Bairro"]])
-	p.Logradouro = strings.ToUpper(row[columnIndex["Logradouro"]])
-	p.Estado = strings.ToUpper(row[columnIndex["Estado"]])
-	p.Cidade = strings.ToUpper(row[columnIndex["Cidade"]])
+	p.RGOrgaoExpedidor = strings.TrimSpace(strings.ToUpper(row[columnIndex["RGOrgaoExpedidor"]]))
+	p.Bairro = strings.TrimSpace(strings.ToUpper(row[columnIndex["Bairro"]]))
+	p.Logradouro = strings.TrimSpace(strings.ToUpper(row[columnIndex["Logradouro"]]))
+	p.Estado = strings.TrimSpace(strings.ToUpper(row[columnIndex["Estado"]]))
+	p.Cidade = strings.TrimSpace(strings.ToUpper(row[columnIndex["Cidade"]]))
 
-	houseNumber := strings.ToUpper(row[columnIndex["Numero"]])
-	p.Numero = houseNumber
-
-	if _, err := strconv.Atoi(houseNumber); err != nil && houseNumber == "" {
+	houseNumber := strings.TrimSpace(strings.ToUpper(row[columnIndex["Numero"]]))
+	if houseNumber == "" {
 		p.Numero = "0"
+	} else {
+		_, err := strconv.Atoi(houseNumber)
+		if err != nil {
+			p.Numero = "0"
+		} else {
+			p.Numero = houseNumber
+		}
 	}
 
 	rgTrim := strings.TrimSpace(strings.ToUpper(row[columnIndex["RG"]]))
@@ -141,8 +144,13 @@ func getProfileContent(row []string, header []string, p *m.Profile) error {
 		return fmt.Errorf("Missing RG value.")
 	}
 
-	re := regexp.MustCompile(`[^A-Z0-9]`)
-	p.RG = re.ReplaceAllString(rgTrim, "")
+	rgFormatted := strings.Replace(rgTrim, ".", "", -1)
+	rgFormatted = strings.Replace(rgFormatted, "-", "", -1)
+	if len(rgFormatted) <= 5 {
+		return fmt.Errorf("Formatting the RG is wrong.")
+	}
+
+	p.RG = rgFormatted
 
 	d, err := formatDate(row[columnIndex["DateOfBirth"]])
 	if err != nil {

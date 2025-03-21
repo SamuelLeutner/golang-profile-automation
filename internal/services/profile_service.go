@@ -16,69 +16,25 @@ import (
 
 const (
 	ID_NATIONALITY          = 0
-	REQUEST_REFILL_RATE     = 1
-	MAX_REQUESTS_PER_SECOND = 10
-	MAX_REQUESTS_PER_HOUR   = 1000
+	MAX_CONCURRENT_REQUESTS = 3
 	PROFILE_TYPE            = "FISICA"
 )
 
 var (
-	BEARER_TOKEN string
-	tokenMutex   sync.Mutex
-	semaphore    = make(chan struct{}, 10)
-
-	tokenRequests  = 10
-	businessTokens = 1000
-
-	lastRefill         = time.Now()
-	lastBusinessRefill = time.Now()
+	BEARER_TOKEN     string
+	lastMinuteRefill time.Time
+	tokenMutex       sync.Mutex
 )
-
-func RefilTokens() {
-	for {
-		time.Sleep(1 * time.Second)
-		tokenMutex.Lock()
-
-		if tokenRequests < MAX_REQUESTS_PER_SECOND {
-			tokenRequests++
-		}
-
-		if time.Since(lastBusinessRefill) >= time.Hour {
-			businessTokens = MAX_REQUESTS_PER_HOUR
-			lastBusinessRefill = time.Now()
-		}
-
-		tokenMutex.Unlock()
-	}
-}
 
 func getAuthToken() (string, error) {
 	tokenMutex.Lock()
 	defer tokenMutex.Unlock()
-
-	for tokenRequests <= 0 {
-		tokenMutex.Unlock()
-		time.Sleep(100 * time.Microsecond)
-		tokenMutex.Lock()
-	}
-
-	tokenRequests--
-	businessTokens--
-
-	if businessTokens <= 0 {
-		for businessTokens <= 0 {
-			tokenMutex.Unlock()
-			time.Sleep(10 * time.Second)
-			tokenMutex.Lock()
-		}
-	}
 
 	if BEARER_TOKEN == "" {
 		respAuth, err := j.AuthenticateJacad(os.Getenv("JACAD_AUTH_TOKEN"))
 		if err != nil {
 			return "", err
 		}
-
 		BEARER_TOKEN = respAuth.Token
 	}
 
@@ -90,12 +46,6 @@ func handleFileValues(c *gin.Context) ([]*m.Profile, string, error) {
 	var wg sync.WaitGroup
 
 	wg.Add(2)
-
-	semaphore <- struct{}{}
-	defer func() {
-		time.Sleep(1 * time.Second)
-		<-semaphore
-	}()
 
 	var token string
 	var authErr error
@@ -137,20 +87,27 @@ func CreateProfile(c *gin.Context) error {
 		return err
 	}
 
-	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var errors []*m.ErrProfile
+
+	semaphore := make(chan struct{}, MAX_CONCURRENT_REQUESTS)
+
+	var wg sync.WaitGroup
 
 	for i, p := range profiles {
 		wg.Add(1)
 
-		go func(p *m.Profile) {
-			defer wg.Done()
+		semaphore <- struct{}{}
 
-			fmt.Printf("Processing user %d/%d: %s\n", i+1, len(profiles), p.Name)
+		go func(i int, p *m.Profile) {
+			defer wg.Done()
+			defer func() { <-semaphore }()
+
+			fmt.Printf("✅ Processing user %d/%d: %s\n", i+1, len(profiles), p.Name)
+
+			time.Sleep(100 * time.Millisecond)
 
 			city, cityErr := j.GetCityId(token, p.Estado, p.Cidade)
-
 			if cityErr != nil {
 				mu.Lock()
 				errors = append(errors, &m.ErrProfile{Line: i, Cpf: p.Cpf, Err: cityErr.Error()})
@@ -158,14 +115,9 @@ func CreateProfile(c *gin.Context) error {
 				return
 			}
 
-			orgId, err := strconv.Atoi(os.Getenv("ORG_ID"))
-			if err != nil {
-				mu.Lock()
-				errors = append(errors, &m.ErrProfile{Line: i, Cpf: p.Cpf, Err: err.Error()})
-				mu.Unlock()
-				return
-			}
+			time.Sleep(100 * time.Millisecond)
 
+			orgId, err := strconv.Atoi(os.Getenv("ORG_ID"))
 			clientId, err := strconv.Atoi(os.Getenv("CLIENT_ID"))
 			if err != nil {
 				mu.Lock()
@@ -191,19 +143,19 @@ func CreateProfile(c *gin.Context) error {
 			mu.Lock()
 			_ = respProfile
 			mu.Unlock()
-		}(p)
+		}(i, p)
 	}
 
 	wg.Wait()
 
 	if len(errors) > 0 {
 		if err := pp.SaveErrors(errors); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Error saving errors file: %v", err)})
-			return fmt.Errorf("error saving errors file: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Erro ao salvar logs: %v", err)})
+			return fmt.Errorf("erro ao salvar logs: %v", err)
 		}
-		fmt.Println("📂 Errors saved in ProfileErrors.xlsx")
+		fmt.Println("📂 Logs salvos em ProfileErrors.xlsx")
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Profile creation process completed.", "errors": len(errors)})
+	c.JSON(http.StatusOK, gin.H{"message": "Processo de criação concluído.", "errors": len(errors)})
 	return nil
 }
