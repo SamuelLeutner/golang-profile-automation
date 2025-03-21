@@ -16,7 +16,7 @@ import (
 
 const (
 	ID_NATIONALITY          = 0
-	MAX_CONCURRENT_REQUESTS = 3
+	MAX_CONCURRENT_REQUESTS = 2
 	PROFILE_TYPE            = "FISICA"
 )
 

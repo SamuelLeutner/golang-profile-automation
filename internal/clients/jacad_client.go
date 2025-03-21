@@ -178,9 +178,9 @@ func CreateProfile(bt string, requestBody *m.Profile) (*http.Response, error) {
 
 	if resp.StatusCode == 400 {
 		b, _ := io.ReadAll(resp.Body)
-		log.Println("Error in request body.", string(b))
+		log.Println("Error in request body for profile.", string(b))
 		resp.Body.Close()
-		return nil, fmt.Errorf("Error in request body.")
+		return nil, fmt.Errorf("Error in request body for profile.")
 	}
 
 	if err := handleErrorResponse(resp); err != nil {
